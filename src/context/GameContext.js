@@ -1,4 +1,5 @@
-import { createContext, useContext, useReducer } from 'react';
+import { createContext, useContext, useReducer, useEffect, useState, useCallback } from 'react';
+import { supabase } from '../lib/supabaseClient';
 
 const GameContext = createContext();
 
@@ -165,11 +166,184 @@ function gameReducer(state, action) {
     }
 }
 
-export function GameProvider({ children }) {
+export function GameProvider({ children, userId, age, gameId, urlParams }) {
     const [state, dispatch] = useReducer(gameReducer, initialState);
+    const [gameSessionId, setGameSessionId] = useState(null);
+    const [isSurveyOpen, setIsSurveyOpen] = useState(false);
+
+    // Create a game_session row only when game actually starts
+    useEffect(() => {
+        const createSession = async () => {
+            if (!state.isGameStarted) return;
+            if (gameSessionId) return; // Already have a session
+            if (!userId) return; // Need userId to create session
+
+            const numericAge = Number.isFinite(Number(age)) ? Number(age) : null;
+            const numericGameId = Number.isFinite(Number(gameId)) ? Number(gameId) : null;
+
+            const payload = {
+                user_id: userId,
+                age: numericAge,
+                game_id: numericGameId,
+                start_time: new Date().toISOString(),
+                score: 0,
+                profile_data: urlParams || {}
+            };
+
+            try {
+                const { data, error } = await supabase
+                    .from('game_sessions')
+                    .insert(payload)
+                    .select('id')
+                    .single();
+
+                if (error) {
+                    console.error('Failed to create game session:', error);
+                    return;
+                }
+
+                setGameSessionId(data?.id || null);
+                console.log('Created game session:', data?.id);
+            } catch (err) {
+                console.error('Unexpected error creating game session:', err);
+            }
+        };
+
+        createSession();
+    }, [state.isGameStarted, userId, age, gameId, urlParams, gameSessionId]);
+
+    // Open survey when game over ONLY if user hasn't completed survey for this game before
+    useEffect(() => {
+        const checkAndOpenSurvey = async () => {
+            if (state.gamePhase !== 'VICTORY' && state.gamePhase !== 'GAME_OVER') {
+                setIsSurveyOpen(false);
+                return;
+            }
+            
+            console.log('🔍 Checking survey display:', { gamePhase: state.gamePhase, gameSessionId, userId, gameId, score: state.score });
+            
+            try {
+                const numericGameId = Number.isFinite(Number(gameId)) ? Number(gameId) : null;
+
+                // If we know the user and game, check historical completion
+                if (userId && numericGameId != null) {
+                    const { data: history, error: historyError } = await supabase
+                        .from('game_sessions')
+                        .select('id')
+                        .eq('user_id', userId)
+                        .eq('game_id', numericGameId)
+                        .eq('survey_completed', true)
+                        .limit(1);
+
+                    if (!historyError && Array.isArray(history) && history.length > 0) {
+                        console.log('❌ Survey already completed for this user and game. Not showing.');
+                        setIsSurveyOpen(false);
+                        return;
+                    }
+                }
+
+                // Fallback to current session's completion flag if available
+                if (gameSessionId) {
+                    const { data, error } = await supabase
+                        .from('game_sessions')
+                        .select('survey_completed')
+                        .eq('id', gameSessionId)
+                        .single();
+                    if (!error && data) {
+                        const completed = Boolean(data?.survey_completed);
+                        console.log('📊 Current session survey_completed:', completed, 'Setting isSurveyOpen to:', !completed);
+                        setIsSurveyOpen(!completed);
+                        return;
+                    } else {
+                        console.log('⚠️ Could not fetch current session, will show survey');
+                    }
+                } else {
+                    console.log('⚠️ No gameSessionId, will show survey');
+                }
+
+                // Default: show if we couldn't verify completion
+                console.log('✅ Showing survey (default - no restrictions found)');
+                setIsSurveyOpen(true);
+            } catch (e) {
+                console.error('⚠️ Error checking survey completion:', e);
+                console.log('✅ Showing survey (fallback due to error)');
+                setIsSurveyOpen(true);
+            }
+        };
+
+        // Add small delay to ensure end_time update completes first
+        const timer = setTimeout(() => {
+            checkAndOpenSurvey();
+        }, 200);
+        
+        return () => clearTimeout(timer);
+    }, [state.gamePhase, gameSessionId, userId, gameId, state.score]);
+
+    // When game ends, update end_time and final score on the session
+    useEffect(() => {
+        const markEndTime = async () => {
+            if ((state.gamePhase !== 'VICTORY' && state.gamePhase !== 'GAME_OVER') || !gameSessionId) return;
+            try {
+                await supabase
+                    .from('game_sessions')
+                    .update({ end_time: new Date().toISOString(), score: state.score })
+                    .eq('id', gameSessionId);
+            } catch (e) {
+                // noop
+            }
+        };
+        markEndTime();
+    }, [state.gamePhase, gameSessionId, state.score]);
+
+    // Wrapper dispatch to reset gameSessionId when starting new game
+    const originalDispatch = dispatch;
+    const wrappedDispatch = useCallback((action) => {
+        if (action.type === 'START_GAME' || action.type === 'RESET_GAME') {
+            setGameSessionId(null);
+        }
+        originalDispatch(action);
+    }, [originalDispatch]);
+
+    const handleCloseSurvey = useCallback(() => {
+        setIsSurveyOpen(false);
+    }, []);
+
+    const handlePlayAgain = useCallback(() => {
+        setIsSurveyOpen(false);
+        wrappedDispatch({ type: 'RESET_GAME' });
+        wrappedDispatch({ type: 'START_GAME' });
+    }, [wrappedDispatch]);
+
+    const handleExitGame = useCallback(async () => {
+        // Update game_sessions to mark that user exited via button
+        if (gameSessionId) {
+            try {
+                await supabase
+                    .from('game_sessions')
+                    .update({ exited_via_button: true, end_time: new Date().toISOString(), score: state.score })
+                    .eq('id', gameSessionId);
+            } catch (e) {
+                console.error('Error updating exited_via_button:', e);
+            }
+        }
+        // Redirect after updating
+        window.location.href = 'https://robot-record-web.hacknao.edu.vn/games';
+    }, [gameSessionId, state.score]);
 
     return (
-        <GameContext.Provider value={{ state, dispatch }}>
+        <GameContext.Provider value={{ 
+            state, 
+            dispatch: wrappedDispatch,
+            gameSessionId,
+            isSurveyOpen,
+            handleCloseSurvey,
+            handlePlayAgain,
+            handleExitGame,
+            userId,
+            age,
+            gameId,
+            urlParams
+        }}>
             {children}
         </GameContext.Provider>
     );

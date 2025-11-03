@@ -6,6 +6,7 @@ import { usePronunciationScoring } from '../hooks/usePronunciationScoring';
 import useSound from '../hooks/useSound';
 import PikaAvatar from './PikaAvatar';
 import PlankObject from './PlankObject';
+import SurveyModal from './SurveyModal';
 
 const SceneContainer = styled.div`
   flex: 1;
@@ -209,6 +210,26 @@ const GameOverButton = styled.button`
   }
 `;
 
+const ExitButton = styled.button`
+  position: fixed;
+  top: 170px;
+  left: 16px;
+  z-index: 50;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 10px;
+  border: 1px solid #0ea5e9;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: 'Press Start 2P', monospace;
+  
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.9);
+    border-color: #22d3ee;
+  }
+`;
+
 const BridgeStructure = styled.div`
   position: absolute;
   bottom: 200px;
@@ -372,7 +393,19 @@ const River = styled.div`
 `;
 
 function GameScene() {
-  const { state, dispatch } = useGame();
+  const { 
+    state, 
+    dispatch,
+    gameSessionId,
+    isSurveyOpen,
+    handleCloseSurvey,
+    handlePlayAgain,
+    handleExitGame,
+    userId,
+    age,
+    gameId,
+    urlParams
+  } = useGame();
   const canvasRef = useRef();
   const engineRef = useRef();
   const renderRef = useRef();
@@ -691,6 +724,9 @@ function GameScene() {
   if (!state.isGameStarted) {
     return (
       <SceneContainer>
+        <ExitButton onClick={handleExitGame}>
+          ← Thoát game
+        </ExitButton>
         <StartScreen>
           <h2>VOICE BRIDGE</h2>
           <Instructions>
@@ -807,7 +843,16 @@ function GameScene() {
         </div>
       </ProcessingIndicator>
 
+      {state.gamePhase !== 'VICTORY' && state.gamePhase !== 'GAME_OVER' && state.isGameStarted && (
+        <ExitButton onClick={handleExitGame}>
+          ← Thoát game
+        </ExitButton>
+      )}
+
       <VictoryScreen show={state.gamePhase === 'VICTORY'}>
+        <ExitButton onClick={handleExitGame} style={{ position: 'absolute', top: '16px', left: '16px' }}>
+          ← Thoát game
+        </ExitButton>
         <h2>🎉 HOÀN THÀNH LEVEL {state.currentLevel}! 🎉</h2>
         <div style={{ margin: '20px 0', fontSize: '10px', color: '#bdc3c7' }}>
           Điểm số: {state.score}<br />
@@ -837,6 +882,9 @@ function GameScene() {
       </VictoryScreen>
 
       <GameOverScreen show={state.gamePhase === 'GAME_OVER'}>
+        <ExitButton onClick={handleExitGame} style={{ position: 'absolute', top: '16px', left: '16px' }}>
+          ← Thoát game
+        </ExitButton>
         <h2>💀 GAME OVER 💀</h2>
         <div style={{ margin: '20px 0', fontSize: '10px', color: '#ffcccc' }}>
           Pika đã rơi xuống sông!<br />
@@ -854,6 +902,19 @@ function GameScene() {
           </GameOverButton>
         </div>
       </GameOverScreen>
+
+      {(state.gamePhase === 'VICTORY' || state.gamePhase === 'GAME_OVER') && (
+        <SurveyModal
+          isOpen={isSurveyOpen}
+          onClose={handleCloseSurvey}
+          onPlayAgain={handlePlayAgain}
+          gameSessionId={gameSessionId}
+          currentGameId={gameId}
+          userId={userId}
+          age={age}
+          urlParams={urlParams}
+        />
+      )}
     </SceneContainer>
   );
 }
