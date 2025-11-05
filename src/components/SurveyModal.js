@@ -321,7 +321,12 @@ function SurveyModal({ isOpen, onClose, onPlayAgain, gameSessionId, currentGameI
             } catch (e) {
                 console.error('Increment number_of_replays failed', e);
             }
-            onPlayAgain?.();
+            
+            // Close modal first, then trigger play again
+            onClose?.();
+            setTimeout(() => {
+                onPlayAgain?.();
+            }, 100);
         } else {
             setStep(5);
             try {

@@ -50,6 +50,125 @@ const LEVEL_CONFIGS = [
             "I love traveling around the world",
             "Music brings people together"
         ]
+    },
+    {
+        level: 4,
+        requiredPlanks: 9,
+        phrases: [
+            "Scientific experiments",
+            "Mathematical equations",
+            "Historical events",
+            "Geographic locations",
+            "Chemical reactions",
+            "Biological systems",
+            "Physical properties",
+            "Environmental issues",
+            "Cultural traditions",
+            "Technological advances",
+            "Social relationships"
+        ]
+    },
+    {
+        level: 5,
+        requiredPlanks: 10,
+        phrases: [
+            "Photosynthesis process",
+            "Gravitational force",
+            "Democratic government",
+            "Economic development",
+            "Cellular structure",
+            "Atmospheric pressure",
+            "Archaeological evidence",
+            "Psychological behavior",
+            "Geometric patterns",
+            "Literary analysis",
+            "Musical composition"
+        ]
+    },
+    {
+        level: 6,
+        requiredPlanks: 11,
+        phrases: [
+            "Electromagnetic spectrum",
+            "Evolutionary theory",
+            "Constitutional rights",
+            "Statistical analysis",
+            "Molecular structure",
+            "Geological formation",
+            "Anthropological research",
+            "Philosophical thinking",
+            "Algebraic expressions",
+            "Dramatic performance",
+            "Architectural design"
+        ]
+    },
+    {
+        level: 7,
+        requiredPlanks: 12,
+        phrases: [
+            "Thermodynamic principles",
+            "Biodiversity conservation",
+            "Parliamentary democracy",
+            "Probability distribution",
+            "Organic chemistry",
+            "Tectonic movements",
+            "Sociological studies",
+            "Ethical considerations",
+            "Trigonometric functions",
+            "Shakespearean tragedy",
+            "Renaissance architecture"
+        ]
+    },
+    {
+        level: 8,
+        requiredPlanks: 13,
+        phrases: [
+            "Quantum mechanics",
+            "Genetic engineering",
+            "International diplomacy",
+            "Calculus derivatives",
+            "Biochemical pathways",
+            "Seismic activity",
+            "Anthropological fieldwork",
+            "Moral philosophy",
+            "Logarithmic scales",
+            "Romantic poetry",
+            "Gothic cathedrals"
+        ]
+    },
+    {
+        level: 9,
+        requiredPlanks: 14,
+        phrases: [
+            "Radioactive decay",
+            "Ecosystem dynamics",
+            "Geopolitical tensions",
+            "Differential calculus",
+            "Protein synthesis",
+            "Volcanic eruptions",
+            "Ethnographic methods",
+            "Existential questions",
+            "Matrix operations",
+            "Modernist literature",
+            "Baroque paintings"
+        ]
+    },
+    {
+        level: 10,
+        requiredPlanks: 15,
+        phrases: [
+            "Nuclear fission",
+            "Evolutionary adaptation",
+            "Constitutional monarchy",
+            "Integral calculus",
+            "DNA replication",
+            "Continental drift",
+            "Archaeological excavation",
+            "Metaphysical concepts",
+            "Vector analysis",
+            "Postmodern fiction",
+            "Abstract expressionism"
+        ]
     }
 ];
 
@@ -140,13 +259,16 @@ function gameReducer(state, action) {
                 currentPhraseIndex: 0,
                 gamePhase: 'PROMPT',
                 planks: [],
-                pikaPosition: { x: 50, y: 300 }
+                pikaPosition: { x: 50, y: 300 },
+                timer: 120
             };
 
         case 'UPDATE_TIMER':
+            const newTimer = Math.max(0, state.timer - 1);
             return {
                 ...state,
-                timer: Math.max(0, state.timer - 1)
+                timer: newTimer,
+                gamePhase: newTimer === 0 ? 'GAME_OVER' : state.gamePhase
             };
 
         case 'UPDATE_PIKA_POSITION':
@@ -156,6 +278,7 @@ function gameReducer(state, action) {
             };
 
         case 'RESET_GAME':
+            console.log('🔄 RESET_GAME action triggered');
             return {
                 ...initialState,
                 isGameStarted: false
@@ -219,9 +342,9 @@ export function GameProvider({ children, userId, age, gameId, urlParams }) {
                 setIsSurveyOpen(false);
                 return;
             }
-            
+
             console.log('🔍 Checking survey display:', { gamePhase: state.gamePhase, gameSessionId, userId, gameId, score: state.score });
-            
+
             try {
                 const numericGameId = Number.isFinite(Number(gameId)) ? Number(gameId) : null;
 
@@ -275,7 +398,7 @@ export function GameProvider({ children, userId, age, gameId, urlParams }) {
         const timer = setTimeout(() => {
             checkAndOpenSurvey();
         }, 200);
-        
+
         return () => clearTimeout(timer);
     }, [state.gamePhase, gameSessionId, userId, gameId, state.score]);
 
@@ -309,9 +432,12 @@ export function GameProvider({ children, userId, age, gameId, urlParams }) {
     }, []);
 
     const handlePlayAgain = useCallback(() => {
+        console.log('🔄 Play Again clicked - resetting and starting new game');
         setIsSurveyOpen(false);
         wrappedDispatch({ type: 'RESET_GAME' });
-        wrappedDispatch({ type: 'START_GAME' });
+        setTimeout(() => {
+            wrappedDispatch({ type: 'START_GAME' });
+        }, 100);
     }, [wrappedDispatch]);
 
     const handleExitGame = useCallback(async () => {
@@ -331,8 +457,8 @@ export function GameProvider({ children, userId, age, gameId, urlParams }) {
     }, [gameSessionId, state.score]);
 
     return (
-        <GameContext.Provider value={{ 
-            state, 
+        <GameContext.Provider value={{
+            state,
             dispatch: wrappedDispatch,
             gameSessionId,
             isSurveyOpen,

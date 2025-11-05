@@ -222,6 +222,15 @@ function BottomUIBar() {
   const totalPlanks = currentLevelConfig?.requiredPlanks || 0;
   const completedPlanks = planks.filter(p => p.status !== 'BROKEN').length;
   
+  // Debug log for phrase display
+  console.log('📝 BottomUIBar phrase info:', {
+    currentLevel,
+    currentPhraseIndex,
+    currentPhrase,
+    levelConfigExists: !!currentLevelConfig,
+    totalPhrases: currentLevelConfig?.phrases?.length
+  });
+  
   const handleMicClick = () => {
     if (gamePhase === 'PROMPT') {
       dispatch({ type: 'SET_PHASE', payload: 'SPEAKING' });

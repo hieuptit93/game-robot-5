@@ -226,7 +226,7 @@ export const usePronunciationScoring = (config = {}) => {
     });
   }, [isRecording, isListening, forceStop, isProcessing, mode, log]);
 
-  // Pre-warm audio context
+  // Pre-warm audio context on first user interaction
   useEffect(() => {
     const handleFirstInteraction = () => {
       if (!audioContextRef.current) {

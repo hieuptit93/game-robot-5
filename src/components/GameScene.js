@@ -449,6 +449,31 @@ function GameScene() {
     }
   });
 
+  // Reset local state when game is reset
+  useEffect(() => {
+    if (!state.isGameStarted) {
+      console.log('🔄 Resetting GameScene local state');
+      setPlanks([]);
+      setCountdown(0);
+      
+      // Clear all planks from Matter.js engine
+      if (engineRef.current) {
+        const allBodies = Matter.Composite.allBodies(engineRef.current.world);
+        const plankBodies = allBodies.filter(body => body.label && body.label.startsWith('plank'));
+        if (plankBodies.length > 0) {
+          console.log('🧹 Removing', plankBodies.length, 'plank bodies from Matter.js engine');
+          Matter.World.remove(engineRef.current.world, plankBodies);
+        }
+      }
+      
+      // Stop any ongoing VAD listening
+      if (isListening) {
+        console.log('🛑 Stopping VAD listening on game reset');
+        stopListening();
+      }
+    }
+  }, [state.isGameStarted, isListening, stopListening]);
+
   // Initialize Matter.js
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -639,7 +664,12 @@ function GameScene() {
   // Auto-start countdown when entering PROMPT phase
   useEffect(() => {
     if (state.gamePhase === 'PROMPT' && countdown === 0) {
-      console.log('🕐 Starting countdown for new phrase');
+      console.log('🕐 Starting countdown for new phrase', {
+        gamePhase: state.gamePhase,
+        countdown,
+        isGameStarted: state.isGameStarted,
+        currentPhraseIndex: state.currentPhraseIndex
+      });
       setCountdown(3);
     }
   }, [state.gamePhase, countdown]);
@@ -664,14 +694,20 @@ function GameScene() {
     }
   }, [countdown, dispatch]);
 
-  // Start listening when entering SPEAKING phase
+  // Start listening when entering SPEAKING phase (only if game is started)
   useEffect(() => {
-    if (state.gamePhase === 'SPEAKING' && !isListening) {
+    console.log('🎤 VAD Effect triggered:', {
+      gamePhase: state.gamePhase,
+      isListening,
+      isGameStarted: state.isGameStarted
+    });
+    
+    if (state.gamePhase === 'SPEAKING' && !isListening && state.isGameStarted) {
       console.log('🎤 Starting VAD listening...');
       playStartRecording();
       startListening();
     }
-  }, [state.gamePhase, isListening, startListening, playStartRecording]);
+  }, [state.gamePhase, isListening, startListening, playStartRecording, state.isGameStarted]);
 
   // Timer countdown
   useEffect(() => {
@@ -690,6 +726,7 @@ function GameScene() {
   }, [state.currentLevel, state.isGameStarted]);
 
   const handleStartGame = () => {
+    console.log('🎮 Starting game...');
     dispatch({ type: 'START_GAME' });
   };
 
@@ -709,17 +746,13 @@ function GameScene() {
   };
 
   const handleReplayLevel = () => {
+    console.log('🔄 Restarting game from level 1');
     setPlanks([]); // Reset planks in component
     dispatch({ type: 'RESET_GAME' });
     dispatch({ type: 'START_GAME' });
   };
 
-  const handleRetryLevel = () => {
-    setPlanks([]); // Reset planks in component
-    dispatch({ type: 'RESET_GAME' });
-    // Keep the same level
-    dispatch({ type: 'START_GAME' });
-  };
+
 
   if (!state.isGameStarted) {
     return (
@@ -815,15 +848,6 @@ function GameScene() {
         ))}
       </GameElements>
 
-      <DebugInfo>
-        Phase: {state.gamePhase}<br />
-        Phrase: {state.currentPhraseIndex + 1}<br />
-        Planks: {planks.length}<br />
-        Countdown: {countdown}<br />
-        IsListening: {isListening ? 'Yes' : 'No'}<br />
-        {pronunciationError && <div style={{ color: '#e74c3c' }}>Error: {pronunciationError}</div>}
-      </DebugInfo>
-
       <CountdownDisplay show={state.gamePhase === 'PROMPT' && countdown > 0}>
         <div style={{ color: '#f39c12', marginBottom: '20px', fontSize: '16px' }}>
           "{currentPhrase}"
@@ -893,12 +917,8 @@ function GameScene() {
         </div>
 
         <div>
-          <GameOverButton onClick={handleRetryLevel}>
-            THỬ LẠI LEVEL {state.currentLevel}
-          </GameOverButton>
-          <br />
           <GameOverButton onClick={handleReplayLevel}>
-            VỀ LEVEL 1
+            CHƠI LẠI TỪ ĐẦU
           </GameOverButton>
         </div>
       </GameOverScreen>
