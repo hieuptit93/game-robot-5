@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
+import { trackPronunciationScore, trackGameEvent } from '../lib/datadogUtils'
 
 // Base64 utilities
 const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -405,12 +406,28 @@ export const usePronunciationScoring = (config = {}) => {
     if (result) {
       setLastResult(result);
       log('✅ Pronunciation processing completed successfully');
+      
+      // Track pronunciation scoring event
+      trackPronunciationScore(
+        result.total_score || 0,
+        textRefs,
+        1 // attempts - could be enhanced to track actual attempts
+      );
+      
       setIsProcessing(false);
       return result;
     } else {
       const errorMsg = 'Failed to process pronunciation';
       setError(errorMsg);
       log('❌ Pronunciation processing failed');
+      
+      // Track pronunciation failure
+      trackGameEvent('pronunciation_failed', {
+        textRefs,
+        error: errorMsg,
+        timestamp: new Date().toISOString()
+      });
+      
       setIsProcessing(false);
       throw new Error(errorMsg);
     }

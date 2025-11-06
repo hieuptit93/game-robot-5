@@ -412,6 +412,7 @@ function GameScene() {
   const [planks, setPlanks] = useState([]);
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef(null);
+  const countdownStartedRef = useRef(false);
 
   // Get current phrase to speak
   const currentLevelConfig = state.levelConfig.find(l => l.level === state.currentLevel);
@@ -455,6 +456,7 @@ function GameScene() {
       console.log('🔄 Resetting GameScene local state');
       setPlanks([]);
       setCountdown(0);
+      countdownStartedRef.current = false;
       
       // Clear all planks from Matter.js engine
       if (engineRef.current) {
@@ -472,7 +474,7 @@ function GameScene() {
         stopListening();
       }
     }
-  }, [state.isGameStarted, isListening, stopListening]);
+  }, [state.isGameStarted]); // Removed isListening and stopListening from dependencies
 
   // Initialize Matter.js
   useEffect(() => {
@@ -642,7 +644,7 @@ function GameScene() {
       console.log('🛑 Stopping VAD listening due to phase change');
       stopListening();
     }
-  }, [state.gamePhase, isListening, stopListening]);
+  }, [state.gamePhase]); // Removed isListening and stopListening from dependencies
 
   // Play sounds when game phase changes
   useEffect(() => {
@@ -663,16 +665,21 @@ function GameScene() {
 
   // Auto-start countdown when entering PROMPT phase
   useEffect(() => {
-    if (state.gamePhase === 'PROMPT' && countdown === 0) {
+    if (state.gamePhase === 'PROMPT' && state.isGameStarted && !countdownStartedRef.current) {
       console.log('🕐 Starting countdown for new phrase', {
         gamePhase: state.gamePhase,
-        countdown,
         isGameStarted: state.isGameStarted,
         currentPhraseIndex: state.currentPhraseIndex
       });
+      countdownStartedRef.current = true;
       setCountdown(3);
     }
-  }, [state.gamePhase, countdown]);
+    
+    // Reset countdown started flag when leaving PROMPT phase
+    if (state.gamePhase !== 'PROMPT') {
+      countdownStartedRef.current = false;
+    }
+  }, [state.gamePhase, state.isGameStarted, state.currentPhraseIndex]);
 
   // Handle countdown timer
   useEffect(() => {
@@ -696,18 +703,12 @@ function GameScene() {
 
   // Start listening when entering SPEAKING phase (only if game is started)
   useEffect(() => {
-    console.log('🎤 VAD Effect triggered:', {
-      gamePhase: state.gamePhase,
-      isListening,
-      isGameStarted: state.isGameStarted
-    });
-    
     if (state.gamePhase === 'SPEAKING' && !isListening && state.isGameStarted) {
       console.log('🎤 Starting VAD listening...');
       playStartRecording();
       startListening();
     }
-  }, [state.gamePhase, isListening, startListening, playStartRecording, state.isGameStarted]);
+  }, [state.gamePhase, state.isGameStarted]); // Removed isListening and startListening from dependencies
 
   // Timer countdown
   useEffect(() => {

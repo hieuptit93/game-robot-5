@@ -4,6 +4,7 @@ import { GameProvider } from './context/GameContext';
 import GameScene from './components/GameScene';
 import TopHUD from './components/TopHUD';
 import BottomUIBar from './components/BottomUIBar';
+import { setUserContext, trackGameEvent } from './lib/datadogUtils';
 
 const AppContainer = styled.div`
   width: 100vw;
@@ -51,10 +52,39 @@ function App() {
       // Remove extracted keys from general params
       const { user_id, userId: userIdKey, age: ageKey, game_id, gameId: gameIdKey, ...rest } = all;
       setUrlParams(rest);
+
+      console.log('🔍 URL Params parsed:', { 
+        userId: extractedUserId, 
+        age: extractedAgeRaw, 
+        gameId: extractedGameId,
+        allParams: all 
+      });
     } catch (e) {
-      // noop
+      console.error('Error parsing URL params:', e);
     }
   }, []);
+
+  // Set Datadog user context when userId is available
+  useEffect(() => {
+    if (userId) {
+      console.log('🎯 Setting Datadog user context:', { userId, age, gameId });
+      setUserContext(userId, {
+        age: age,
+        gameId: gameId,
+        source: 'url_params',
+        timestamp: new Date().toISOString()
+      });
+
+      // Track app load with user info
+      trackGameEvent('app_loaded', {
+        userId: userId,
+        age: age,
+        gameId: gameId,
+        hasUrlParams: Object.keys(urlParams).length > 0,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [userId, age, gameId, urlParams]);
 
   return (
     <GameProvider userId={userId} age={age} gameId={gameId} urlParams={urlParams}>

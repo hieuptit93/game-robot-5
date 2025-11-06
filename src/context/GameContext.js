@@ -1,5 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { trackGameEvent, trackGameProgress, setUserContext } from '../lib/datadogUtils';
 
 const GameContext = createContext();
 
@@ -188,6 +189,11 @@ const initialState = {
 function gameReducer(state, action) {
     switch (action.type) {
         case 'START_GAME':
+            // Track game start event
+            trackGameEvent('game_started', {
+                level: state.currentLevel,
+                timestamp: new Date().toISOString()
+            });
             return {
                 ...state,
                 isGameStarted: true,
@@ -217,6 +223,14 @@ function gameReducer(state, action) {
             };
 
         case 'ADD_SCORE':
+            // Track score addition
+            trackGameEvent('score_added', {
+                scoreAdded: action.payload,
+                totalScore: state.score + action.payload,
+                combo: action.payload > 0 ? state.combo + 1 : 0,
+                level: state.currentLevel,
+                timestamp: new Date().toISOString()
+            });
             return {
                 ...state,
                 score: state.score + action.payload,
@@ -230,6 +244,13 @@ function gameReducer(state, action) {
 
             // Check if we have enough successful planks to win
             if (successfulPlanks >= currentLevelConfig.requiredPlanks) {
+                trackGameEvent('level_completed', {
+                    level: state.currentLevel,
+                    score: state.score,
+                    successfulPlanks,
+                    requiredPlanks: currentLevelConfig.requiredPlanks,
+                    timestamp: new Date().toISOString()
+                });
                 return {
                     ...state,
                     gamePhase: 'VICTORY',
@@ -239,6 +260,14 @@ function gameReducer(state, action) {
 
             // Check if we've run out of phrases without completing the bridge
             if (nextIndex >= currentLevelConfig.phrases.length) {
+                trackGameEvent('game_over', {
+                    level: state.currentLevel,
+                    score: state.score,
+                    successfulPlanks,
+                    requiredPlanks: currentLevelConfig.requiredPlanks,
+                    reason: 'out_of_phrases',
+                    timestamp: new Date().toISOString()
+                });
                 return {
                     ...state,
                     gamePhase: 'GAME_OVER',
@@ -253,6 +282,12 @@ function gameReducer(state, action) {
             };
 
         case 'NEXT_LEVEL':
+            trackGameEvent('level_advanced', {
+                fromLevel: state.currentLevel,
+                toLevel: state.currentLevel + 1,
+                score: state.score,
+                timestamp: new Date().toISOString()
+            });
             return {
                 ...state,
                 currentLevel: state.currentLevel + 1,
@@ -265,6 +300,14 @@ function gameReducer(state, action) {
 
         case 'UPDATE_TIMER':
             const newTimer = Math.max(0, state.timer - 1);
+            if (newTimer === 0) {
+                trackGameEvent('game_over', {
+                    level: state.currentLevel,
+                    score: state.score,
+                    reason: 'timer_expired',
+                    timestamp: new Date().toISOString()
+                });
+            }
             return {
                 ...state,
                 timer: newTimer,
@@ -327,6 +370,13 @@ export function GameProvider({ children, userId, age, gameId, urlParams }) {
 
                 setGameSessionId(data?.id || null);
                 console.log('Created game session:', data?.id);
+
+                // Set user context for Datadog
+                setUserContext(userId, {
+                    age: numericAge,
+                    gameId: numericGameId,
+                    sessionId: data?.id
+                });
             } catch (err) {
                 console.error('Unexpected error creating game session:', err);
             }
